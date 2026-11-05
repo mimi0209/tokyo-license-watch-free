@@ -10,7 +10,9 @@
 
 [新通知主题测试与再次扫描日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：测试消息已被 ntfy 接受，三个考场及全部可见月份再次检查成功，未确认日期为 0。使用者已确认手机收到新主题的测试消息。
 
-Cloudflare 到 GitHub 的连续运行必须在配置完成后确认。
+Cloudflare 官方 Wrangler 4.139.0 的部署打包检查已通过，代码包约 4 KiB；[打包及扫描验证日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42024481551)。这一步没有创建 Cloudflare 线上资源。
+
+Cloudflare 到 GitHub 的连续运行必须在账号连接、部署和密钥配置完成后确认。
 
 ## 检查内容
 
