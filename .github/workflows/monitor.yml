@@ -55,6 +55,13 @@ jobs:
         run: node --test cloudflare/test/worker.test.mjs
 
       - run: npm install --no-audit --no-fund
+      - name: Send requested phone test
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[phone-test]')
+        run: npm run scan
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          MODE: test-notification
+
       - run: npx playwright install --with-deps chromium
 
       - uses: actions/cache/restore@v4
