@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "npm run test && npm run test:runtime && wrangler deploy",
     "check": "wrangler deploy --dry-run",
-    "test": "node --test test/worker.test.mjs"
+    "test": "node --test test/worker.test.mjs",
+    "test:runtime": "node --test test/runtime.test.mjs"
   },
   "devDependencies": {
     "wrangler": "4.139.0"

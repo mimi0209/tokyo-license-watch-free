@@ -24,7 +24,7 @@ test('five-minute event dispatches only scan, using a scoped fixed GitHub endpoi
   assert.equal(mock.calls[1].url, 'https://api.github.com/repos/' + repo + '/actions/workflows/monitor.yml/dispatches');
   assert.deepEqual(JSON.parse(mock.calls[1].options.body), {ref: 'main', inputs: {mode: 'scan', source: 'cloud-timer', scheduled_at: '2026-11-05T08:30:00.000Z'}});
   for (const {options} of mock.calls) {
-    assert.equal(options.redirect, 'error');
+    assert.equal(options.redirect, 'manual');
     assert.ok(options.signal instanceof AbortSignal);
     assert.equal(options.headers.Authorization, 'Bearer ' + env.GITHUB_TOKEN);
     assert.equal(options.headers['X-GitHub-Api-Version'], '2026-03-10');
@@ -91,6 +91,29 @@ test('network failures do not leak a token embedded in an upstream exception', a
   } catch (error) { failure = error; }
   assert.equal(failure.message, 'GitHub request failed before a response.');
   assert.ok(!failure.message.includes(env.GITHUB_TOKEN));
+});
+
+test('redirects stop without following Location or launching another request', async () => {
+  for (const redirectAt of [1, 2]) {
+    let calls = 0;
+    const request = async (url, options) => {
+      calls++;
+      assert.equal(options.redirect, 'manual');
+      if (calls === redirectAt) return new Response(null, {status: 302, headers: {Location: 'https://untrusted.invalid/' + env.GITHUB_TOKEN}});
+      return new Response(JSON.stringify({private: false, visibility: 'public', full_name: repo}));
+    };
+    await assert.rejects(dispatchScan(eventAt('2026-11-05T08:30:00Z'), env, request), {message: 'GitHub redirect blocked: HTTP 302'});
+    assert.equal(calls, redirectAt);
+  }
+});
+
+test('request failures expose only a known category, never an upstream message', async () => {
+  for (const name of ['TypeError', 'TimeoutError', 'AbortError']) {
+    const failure = Object.assign(new Error(env.GITHUB_TOKEN), {name});
+    await assert.rejects(dispatchScan(eventAt('2026-11-05T08:30:00Z'), env, async () => { throw failure; }), {
+      message: 'GitHub request failed before a response (' + name + ').'
+    });
+  }
 });
 
 test('public HTTP endpoint cannot launch a scan or return configuration', async () => {

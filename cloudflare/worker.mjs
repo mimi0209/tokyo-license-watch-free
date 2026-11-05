@@ -11,11 +11,22 @@ function configuration(env) {
 }
 
 async function githubRequest(url, options, request) {
-  try { return await request(url, {...options, redirect: 'error', signal: AbortSignal.timeout(15000)}); }
-  catch { throw new Error('GitHub request failed before a response.'); }
+  let response;
+  try {
+    // Workers supports manual/follow, but rejects redirect: 'error' before sending.
+    response = await request(url, {...options, redirect: 'manual', signal: AbortSignal.timeout(15000)});
+  } catch (error) {
+    // Only expose known error categories. Upstream messages may contain credentials.
+    const type = ['TypeError', 'TimeoutError', 'AbortError'].includes(error?.name) ? ' (' + error.name + ')' : '';
+    throw new Error('GitHub request failed before a response' + type + '.');
+  }
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error('GitHub redirect blocked: HTTP ' + response.status);
+  }
+  return response;
 }
 
-export async function dispatchScan(event, env, request = fetch) {
+export async function dispatchScan(event, env, request = (url, options) => globalThis.fetch(url, options)) {
   if (event.cron !== FIVE_MINUTES) throw new Error('Unexpected cron expression; use */5 * * * *.');
   if (!Number.isFinite(event.scheduledTime)) throw new Error('Scheduled time is missing.');
   const time = new Date(event.scheduledTime);

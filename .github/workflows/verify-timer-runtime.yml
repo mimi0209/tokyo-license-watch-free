@@ -1,0 +1,22 @@
+name: Verify Cloudflare timer runtime
+on:
+  push:
+    branches: [codex/fix-cloudflare-runtime]
+permissions:
+  contents: read
+jobs:
+  runtime:
+    if: toJSON(github.event.repository.private) == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --prefix cloudflare --no-audit --no-fund
+      - run: npm --prefix cloudflare run test
+      - run: npm --prefix cloudflare run test:runtime
+      - run: npm --prefix cloudflare run check
+        env:
+          WRANGLER_SEND_METRICS: 'false'

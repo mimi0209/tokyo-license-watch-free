@@ -62,6 +62,10 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: "false"
 
+      - name: Test timer in Cloudflare runtime
+        if: github.event_name == 'push'
+        run: npm --prefix cloudflare run test:runtime
+
       - run: npm install --no-audit --no-fund
       - name: Send requested phone test
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[phone-test]')
