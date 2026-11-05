@@ -54,6 +54,14 @@ jobs:
         if: github.event_name == 'push'
         run: node --test cloudflare/test/worker.test.mjs
 
+      - name: Check Cloudflare deployment bundle
+        if: github.event_name == 'push'
+        run: |
+          npm install --prefix cloudflare --no-audit --no-fund
+          npm --prefix cloudflare run check
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
       - run: npm install --no-audit --no-fund
       - name: Send requested phone test
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[phone-test]')

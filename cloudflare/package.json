@@ -1,0 +1,13 @@
+{
+  "name": "tokyo-license-timer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run",
+    "test": "node --test test/worker.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.139.0"
+  }
+}

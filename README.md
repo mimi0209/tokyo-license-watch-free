@@ -2,13 +2,13 @@
 
 此版本使用 **Cloudflare Workers Free 的定时器**，每五分钟调用一次 GitHub 的运行接口；浏览器扫描由**公开仓库的标准 GitHub Linux 运行器**执行。Mac 可以合盖或关机。
 
-**当前状态：公开仓库已上传，部署验证通过；新通知主题的测试请求已被 ntfy 接受，尚待使用者确认手机收件；Cloudflare 定时触发尚待配置。**
+**当前状态：公开仓库已上传，部署验证通过；新通知主题已测试并由使用者确认手机收到；Cloudflare 定时触发尚待配置。**
 
 2026-11-05 20:03（日本时间）的公开标准运行器实测：13 项定时器测试通过；江東、鮫洲、府中三个考场及官网当时可查看的 2026 年 11 月至 2027 年 2 月均检查成功，未发现可选时段，没有未确认日期。这是一次部署验证，尚不能证明每五分钟自动运行。
 
 [部署验证日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42015588549)
 
-[新通知主题测试与再次扫描日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：测试消息已被 ntfy 接受，三个考场及全部可见月份再次检查成功，未确认日期为 0。手机收件仍需由使用者确认。
+[新通知主题测试与再次扫描日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：测试消息已被 ntfy 接受，三个考场及全部可见月份再次检查成功，未确认日期为 0。使用者已确认手机收到新主题的测试消息。
 
 Cloudflare 到 GitHub 的连续运行必须在配置完成后确认。
 
@@ -57,7 +57,27 @@ Cloudflare 免费计划有调用和 CPU 限制；免费平台都可能延迟或�
 
 token 仅在下一步的 Cloudflare Secret 输入框填写，不放进代码、截图或聊天。
 
-### 3. 配置 Cloudflare 免费定时器
+### 3. 从 GitHub 导入 Cloudflare（手机推荐）
+
+先登录或注册 Cloudflare 免费账号，然后进入 **Workers & Pages → Create application → GitHub**，连接并选择本公开仓库。GitHub 授权范围只需包含本仓库。
+
+配置如下：
+
+| 字段 | 值 |
+| --- | --- |
+| Worker name | `tokyo-license-timer` |
+| Branch | `main` |
+| Root directory | `cloudflare` |
+| Build command | 留空 |
+| Deploy command | `npm run deploy` |
+
+选择 Workers Free，保存并部署。仓库已设好目标 GitHub 仓库、启用开关和五分钟 Cron，无需在手机粘贴 Worker 代码。
+
+部署后，在这个 Worker 的 **Settings → Variables and Secrets → Add** 中添加 **Secret**，名称为 `GITHUB_TOKEN`，值为上一步创建的 GitHub fine-grained token。点击 Deploy 应用该 Secret。Build variables 只供构建使用，不能替代运行时 Secret。
+
+GitHub API token 只在 Cloudflare 的 Secret 输入框填写，不提交到仓库、不发到聊天。配置完成后，仍须观察至少两轮 `cloud-timer / scan` 执行记录和扫描结果，才能确认自动检查上线。
+
+### 其他方式：直接配置 Cloudflare 免费定时器
 
 在 Cloudflare **Workers & Pages** 创建一个 Worker，使用 Free 计划。代码为 `cloudflare/worker.mjs`。
 
@@ -90,9 +110,13 @@ token 仅在下一步的 Cloudflare Secret 输入框填写，不放进代码、�
 
 ## 暂停与恢复
 
-- Cloudflare 的 `ENABLE_MONITOR=false`：暂停普通五分钟检查，日本时间 0:00 仍检查一次。
-- 删除或禁用 Cloudflare Cron Trigger：停止全部自动检查，包括 0:00。
-- 恢复 Cron Trigger，并设 `ENABLE_MONITOR=true`：恢复普通检查。
+从 GitHub 导入后，以仓库的 `cloudflare/wrangler.toml` 为配置来源，提交后由 Cloudflare 自动部署：
+
+- 将 `ENABLE_MONITOR` 改为 `"false"`：暂停普通五分钟检查，日本时间 0:00 仍检查一次。
+- 将 `[triggers]` 下的 `crons` 改为 `[]`：停止全部自动检查，包括 0:00。
+- 将 `crons` 恢复为 `["*/5 * * * *"]` 并设 `ENABLE_MONITOR="true"`：恢复普通检查。
+
+仅在控制台临时修改变量或删除 Cron，可能被下一次 Git 部署覆盖。触发器变更也需要平台传播时间。
 - 更换 token 后需在 Cloudflare 更新 Secret；请留意 token 到期时间。
 
 ## 本地检查

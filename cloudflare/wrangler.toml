@@ -8,7 +8,7 @@ preview_urls = false
 crons = ["*/5 * * * *"]
 
 [vars]
-GITHUB_REPOSITORY = "your-github-name/tokyo-license-watch-free"
+GITHUB_REPOSITORY = "mimi0209/tokyo-license-watch-free"
 ENABLE_MONITOR = "true"
 
 # GITHUB_TOKEN must be added as a Cloudflare Secret. Never put its value in this file.
