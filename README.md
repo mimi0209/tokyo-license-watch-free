@@ -2,11 +2,13 @@
 
 此版本使用 **Cloudflare Workers Free 的定时器**，每五分钟调用一次 GitHub 的运行接口；浏览器扫描由**公开仓库的标准 GitHub Linux 运行器**执行。Mac 可以合盖或关机。
 
-**当前状态：公开仓库已上传，部署验证通过；手机通知 Secret 和 Cloudflare 定时触发尚待配置。**
+**当前状态：公开仓库已上传，部署验证通过；新通知主题的测试请求已被 ntfy 接受，尚待使用者确认手机收件；Cloudflare 定时触发尚待配置。**
 
 2026-11-05 20:03（日本时间）的公开标准运行器实测：13 项定时器测试通过；江東、鮫洲、府中三个考场及官网当时可查看的 2026 年 11 月至 2027 年 2 月均检查成功，未发现可选时段，没有未确认日期。这是一次部署验证，尚不能证明每五分钟自动运行。
 
 [部署验证日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42015588549)
+
+[新通知主题测试与再次扫描日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：测试消息已被 ntfy 接受，三个考场及全部可见月份再次检查成功，未确认日期为 0。手机收件仍需由使用者确认。
 
 Cloudflare 到 GitHub 的连续运行必须在配置完成后确认。
 
@@ -71,7 +73,7 @@ token 仅在下一步的 Cloudflare Secret 输入框填写，不放进代码、�
 
 使用 Wrangler 时，先修改 `cloudflare/wrangler.toml` 中的仓库名；token 仍通过 Secret 配置。HTTP 入口不提供触发功能，可保持 workers.dev 和预览 URL 关闭。
 
-修改工作流后会自动执行一次 `deployment-check / verify`，它测试定时器代码并真实检查官网，但不发送通知。该记录不能证明免费定时链已经启用。
+修改工作流后会自动执行一次 `deployment-check / verify`，它测试定时器代码并真实检查官网，默认不发送通知。仅当该次提交明确带有 `[phone-test]` 标记时，部署验证另发送一次清楚标注的手机测试消息；定时扫描不会发送这种测试消息。该部署记录不能证明免费定时链已经启用。
 
 ## 判断是否正在运行
 
