@@ -1,7 +1,10 @@
 name: Tokyo license watch
-run-name: "${{ inputs.source || 'manual' }} / ${{ inputs.mode || 'scan' }} / ${{ inputs.scheduled_at || 'now' }}"
+run-name: "${{ github.event_name == 'push' && 'deployment-check' || inputs.source || 'manual' }} / ${{ github.event_name == 'push' && 'verify' || inputs.mode || 'scan' }} / ${{ inputs.scheduled_at || 'now' }}"
 
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/monitor.yml']
   workflow_dispatch:
     inputs:
       mode:
@@ -38,7 +41,7 @@ jobs:
           printf 'Source: %s\nScheduled time (UTC): %s\n' "$TRIGGER_SOURCE" "$SCHEDULED_AT"
           date -u '+Start: %Y-%m-%d %H:%M:%S UTC'
         env:
-          TRIGGER_SOURCE: ${{ inputs.source }}
+          TRIGGER_SOURCE: ${{ github.event_name == 'push' && 'deployment-check' || inputs.source }}
           SCHEDULED_AT: ${{ inputs.scheduled_at }}
 
       - uses: actions/checkout@v4
@@ -46,6 +49,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Test free timer
+        if: github.event_name == 'push'
+        run: node --test cloudflare/test/worker.test.mjs
 
       - run: npm install --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
@@ -60,7 +67,7 @@ jobs:
         run: npm run scan
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          MODE: ${{ inputs.mode || 'scan' }}
+          MODE: ${{ github.event_name == 'push' && 'verify' || inputs.mode || 'scan' }}
 
       - uses: actions/cache/save@v4
         if: always() && hashFiles('.state/last.json') != ''

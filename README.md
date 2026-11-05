@@ -65,6 +65,8 @@ token 仅在下一步的 Cloudflare Secret 输入框填写，不放进代码、�
 
 使用 Wrangler 时，先修改 `cloudflare/wrangler.toml` 中的仓库名；token 仍通过 Secret 配置。HTTP 入口不提供触发功能，可保持 workers.dev 和预览 URL 关闭。
 
+修改工作流后会自动执行一次 `deployment-check / verify`，它测试定时器代码并真实检查官网，但不发送通知。该记录不能证明免费定时链已经启用。
+
 ## 判断是否正在运行
 
 1. Cloudflare 日志出现 `DISPATCH_ACCEPTED`，表示 GitHub 接受了启动请求。
