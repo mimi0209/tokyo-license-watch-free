@@ -1,0 +1,69 @@
+name: Tokyo license watch
+run-name: "${{ inputs.source || 'manual' }} / ${{ inputs.mode || 'scan' }} / ${{ inputs.scheduled_at || 'now' }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "scan 检查空位；test-notification 只测试手机通知"
+        type: choice
+        options: [scan, test-notification]
+        default: scan
+      source:
+        description: "由 Cloudflare 定时器或手动触发"
+        type: choice
+        options: [manual, cloud-timer]
+        default: manual
+      scheduled_at:
+        description: "定时器计划触发时间（UTC，手动运行可留空）"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tokyo-license-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    # Fail closed on a private repository so this export cannot consume paid private runner minutes.
+    if: toJSON(github.event.repository.private) == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Record trigger
+        run: |
+          printf 'Source: %s\nScheduled time (UTC): %s\n' "$TRIGGER_SOURCE" "$SCHEDULED_AT"
+          date -u '+Start: %Y-%m-%d %H:%M:%S UTC'
+        env:
+          TRIGGER_SOURCE: ${{ inputs.source }}
+          SCHEDULED_AT: ${{ inputs.scheduled_at }}
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: .state
+          key: watch-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: watch-state-
+
+      - name: Check availability or send test
+        run: npm run scan
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          MODE: ${{ inputs.mode || 'scan' }}
+
+      - uses: actions/cache/save@v4
+        if: always() && hashFiles('.state/last.json') != ''
+        with:
+          path: .state
+          key: watch-state-${{ github.run_id }}-${{ github.run_attempt }}

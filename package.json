@@ -1,0 +1,9 @@
+{
+  "name": "tokyo-license-cloud-watch",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {"scan": "node monitor.mjs"},
+  "dependencies": {"playwright": "1.62.1"},
+  "engines": {"node": ">=22"}
+}
