@@ -1,18 +1,23 @@
 # 东京学科考试空位监控：免费方案
 
-此版本使用 **Cloudflare Workers Free 的定时器**，每五分钟调用一次 GitHub 的运行接口；浏览器扫描由**公开仓库的标准 GitHub Linux 运行器**执行。Mac 可以合盖或关机。
+此版本使用 **Cloudflare Workers Free 的定时器**，每五分钟调用 GitHub 的运行接口；浏览器扫描由**公开仓库的标准 GitHub Linux 运行器**执行。Mac 可以合盖或关机。
 
-**当前状态：公开仓库已上传，部署验证通过；新通知主题已测试并由使用者确认手机收到；Cloudflare 定时触发尚待配置。**
+**当前状态（2026-11-06）：已确认连续两轮由 Cloudflare 自动触发、以 `MODE=scan` 完成正式扫描。手机通知此前已测试并由使用者确认收到。**
 
-2026-11-05 20:03（日本时间）的公开标准运行器实测：13 项定时器测试通过；江東、鮫洲、府中三个考场及官网当时可查看的 2026 年 11 月至 2027 年 2 月均检查成功，未发现可选时段，没有未确认日期。这是一次部署验证，尚不能证明每五分钟自动运行。
+以下时间均为日本时间；计划触发与实际扫描完成分开记录，平台排队可能造成延迟。
 
-[部署验证日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42015588549)
+| 计划触发 | 扫描完成 | 结果 |
+| --- | --- | --- |
+| 2026-11-06 09:30 | 09:35:32 | [正式扫描成功](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42137274942) |
+| 2026-11-06 09:35 | 09:37:04 | [正式扫描成功](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42137898897) |
 
-[新通知主题测试与再次扫描日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：测试消息已被 ntfy 接受，三个考场及全部可见月份再次检查成功，未确认日期为 0。使用者已确认手机收到新主题的测试消息。
+两轮均检查了江東、鮫洲、府中，以及官网当时可查看的 2026 年 11 月至 2027 年 2 月：没有未确认日期，没有可选时段。以后月份范围随官网可查看范围变化，不固定为这四个月。
 
-Cloudflare 官方 Wrangler 4.139.0 的部署打包检查已通过，代码包约 4 KiB；[打包及扫描验证日志](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42024481551)。这一步没有创建 Cloudflare 线上资源。
+[运行时回归验证](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42131799870)：15 项单元测试和 3 项真实 `workerd` 引擎测试通过，旧版请求失败可复现，修正版请求和拒绝跳转均验证成功。模拟请求使用假凭据，不代替上面的真实自动任务验证。
 
-Cloudflare 到 GitHub 的连续运行必须在账号连接、部署和密钥配置完成后确认。
+[快速启动实测](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42137543558)和[正式发布验证](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42137908993)均通过：直接安装完整 Chromium，复用标准 Ubuntu 24.04 镜像已有系统库，完成三个考场及全部可见月份的官网扫描。
+
+[手机通知测试记录](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：使用者已确认收到新主题的测试消息。正常扫描没有空位时不会发手机通知。
 
 ## 检查内容
 
@@ -67,7 +72,7 @@ token 仅在下一步的 Cloudflare Secret 输入框填写，不放进代码、�
 
 | 字段 | 值 |
 | --- | --- |
-| Worker name | `tokyo-license-timer` |
+| Worker name | `tokyo-license-watch-free` |
 | Branch | `main` |
 | Root directory | `cloudflare` |
 | Build command | 留空 |
@@ -75,7 +80,7 @@ token 仅在下一步的 Cloudflare Secret 输入框填写，不放进代码、�
 
 选择 Workers Free，保存并部署。仓库已设好目标 GitHub 仓库、启用开关和五分钟 Cron，无需在手机粘贴 Worker 代码。
 
-部署后，在这个 Worker 的 **Settings → Variables and Secrets → Add** 中添加 **Secret**，名称为 `GITHUB_TOKEN`，值为上一步创建的 GitHub fine-grained token。点击 Deploy 应用该 Secret。Build variables 只供构建使用，不能替代运行时 Secret。
+部署后，在这个 Worker 的 **Settings → Variables and Secrets → Add** 中添加 **Secret**，名称为 `GITHUB_TOKEN`，值为上一步创建的 GitHub fine-grained token。保存并应用到 Production，以新一轮运行日志确认其生效。Build variables 只供构建使用，不能替代运行时 Secret。
 
 GitHub API token 只在 Cloudflare 的 Secret 输入框填写，不提交到仓库、不发到聊天。配置完成后，仍须观察至少两轮 `cloud-timer / scan` 执行记录和扫描结果，才能确认自动检查上线。
 
@@ -121,14 +126,27 @@ GitHub API token 只在 Cloudflare 的 Secret 输入框填写，不提交到仓�
 仅在控制台临时修改变量或删除 Cron，可能被下一次 Git 部署覆盖。触发器变更也需要平台传播时间。
 - 更换 token 后需在 Cloudflare 更新 Secret；请留意 token 到期时间。
 
+## 已修复的问题
+
+- `GITHUB_TOKEN secret is missing`：运行版本没有读到该绑定。令牌必须配置在对应 Worker 的 Production 运行时 Secret 中。部署配置的名称已与线上 Worker 对齐，并开启 `keep_vars` 保留控制台其他变量；令牌仍应使用 Secret 类型，不能写入代码。
+- `GitHub request failed before a response`：旧版使用 Workers 不支持的 `redirect: error`，构造请求时就失败。现改为 `manual` 并拒绝所有 3xx；运行时测试覆盖这个实际差异，错误日志仅返回安全类别。
+- 浏览器安装过慢：首轮 09:25 任务在反复安装系统依赖时超时。现使用验证过的快速安装方式，并把正式扫描与发布验证分开排队。标准运行器镜像若更换，应重新验证系统库是否齐全。
+
 ## 本地检查
 
-`node --test cloudflare/test/worker.test.mjs`
+```bash
+npm install --prefix cloudflare --no-audit --no-fund
+npm --prefix cloudflare run test
+npm --prefix cloudflare run test:runtime
+npm --prefix cloudflare run check
+```
 
-测试覆盖：普通定时、日本时区午夜、停用开关、私有仓库阻止、固定扫描模式、新旧接口回执、错误与密钥保护。它不能代替部署后的连续执行验证。
+`npm --prefix cloudflare run deploy` 会先执行两组测试，通过后才发布。测试覆盖普通定时、日本时区午夜、停用开关、私有仓库阻止、固定扫描模式、新旧接口回执、密钥保护，以及真实 Workers 运行时的请求与跳转行为。它们不能代替部署后的连续正式扫描验证。
 
 官方说明：
 - https://docs.github.com/en/billing/concepts/product-billing/github-actions
 - https://developers.cloudflare.com/workers/platform/pricing/
 - https://developers.cloudflare.com/workers/platform/limits/
 - https://developers.cloudflare.com/workers/configuration/cron-triggers/
+
+- https://developers.cloudflare.com/workers/runtime-apis/request/
