@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: tokyo-license-monitor
+  group: tokyo-license-monitor-${{ github.event_name == 'push' && 'verify' || inputs.mode || 'scan' }}
   cancel-in-progress: false
 
 jobs:
@@ -74,7 +74,7 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           MODE: test-notification
 
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --no-shell chromium
 
       - uses: actions/cache/restore@v4
         with:
