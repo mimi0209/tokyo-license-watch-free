@@ -13,7 +13,7 @@ const dispatch = root + '/actions/workflows/monitor.yml/dispatches';
 const bindings = {GITHUB_REPOSITORY: repo, GITHUB_TOKEN: 'unit-test-token-not-real', ENABLE_MONITOR: 'true'};
 const event = {cron: '*/5 * * * *', scheduledTime: new Date('2026-11-06T00:00:00Z')};
 
-function harness(script = source, {redirect = false} = {}) {
+function harness(script = source, {redirect = false, enabled = 'true'} = {}) {
   const calls = [];
   // All outbound requests terminate here. The runtime tests cannot reach the Internet.
   const outboundService = async request => {
@@ -30,7 +30,7 @@ function harness(script = source, {redirect = false} = {}) {
     }
     return new Response('unexpected endpoint', {status: 500});
   };
-  const options = {modules: true, script, compatibilityDate: '2026-01-01', bindings, outboundService, cf: false};
+  const options = {modules: true, script, compatibilityDate: '2026-01-01', bindings: {...bindings, ENABLE_MONITOR: enabled}, outboundService, cf: false};
   // Miniflare v5 supplies an explicit converter for the v4 options shape.
   const mf = new engine.Miniflare(engine.convertV4MiniflareOptions ? engine.convertV4MiniflareOptions(options) : options);
   return {mf, calls};
@@ -70,5 +70,21 @@ test('real Workers fetch never follows a GitHub redirect to another host', async
     assert.equal(result.outcome, 'exception');
     assert.equal(h.calls.length, 2);
     assert.ok(h.calls.every(x => x.url.origin === 'https://api.github.com'));
+  } finally { await h.mf.dispose(); }
+});
+
+test('real Workers midnight scan survives a paused monitor and dispatches only once', async () => {
+  const h = harness(source, {enabled: 'false'});
+  try {
+    const worker = await h.mf.getWorker();
+    const runAt = iso => worker.scheduled({...event, scheduledTime: new Date(iso)});
+    assert.equal((await runAt('2026-11-06T14:55:08.039Z')).outcome, 'ok');
+    assert.equal(h.calls.length, 0);
+    assert.equal((await runAt('2026-11-06T15:00:08.039Z')).outcome, 'ok');
+    assert.equal(h.calls.length, 2);
+    assert.equal(h.calls.filter(x => x.method === 'POST').length, 1);
+    assert.equal(JSON.parse(h.calls[1].body).inputs.scheduled_at, '2026-11-06T15:00:08.039Z');
+    assert.equal((await runAt('2026-11-06T15:05:08.039Z')).outcome, 'ok');
+    assert.equal(h.calls.length, 2);
   } finally { await h.mf.dispose(); }
 });

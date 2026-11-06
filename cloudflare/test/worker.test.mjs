@@ -38,13 +38,21 @@ test('disabled regular monitoring makes no GitHub request', async () => {
   assert.equal(calls, 0);
 });
 
-test('00:00 Japan remains one check when regular monitoring is disabled', async () => {
-  const mock = mockGitHub();
-  const result = await dispatchScan(eventAt('2026-11-05T15:00:00Z'), {...env, ENABLE_MONITOR: 'false'}, mock.request);
-  assert.equal(result.accepted, true);
-  assert.equal(mock.calls.length, 2);
-  const next = await dispatchScan(eventAt('2026-11-05T15:05:00Z'), {...env, ENABLE_MONITOR: 'false'}, async () => { throw Error('must not call'); });
-  assert.equal(next.accepted, false);
+test('00:00 Japan dispatches exactly once with ordinary monitoring on or off', async () => {
+  for (const enabled of ['true', 'false']) {
+    for (const iso of ['2026-11-06T15:00:00Z', '2026-11-06T15:00:08.039Z']) {
+      const mock = mockGitHub();
+      const result = await dispatchScan(eventAt(iso), {...env, ENABLE_MONITOR: enabled}, mock.request);
+      assert.equal(result.accepted, true);
+      assert.equal(mock.calls.length, 2);
+      assert.equal(mock.calls.filter(x => x.options.method === 'POST').length, 1);
+      assert.equal(JSON.parse(mock.calls[1].options.body).inputs.mode, 'scan');
+    }
+  }
+  for (const iso of ['2026-11-06T14:55:08.039Z', '2026-11-06T15:05:08.039Z']) {
+    const skipped = await dispatchScan(eventAt(iso), {...env, ENABLE_MONITOR: 'false'}, async () => { throw Error('must not call'); });
+    assert.equal(skipped.accepted, false);
+  }
 });
 
 test('a private or internal repository is rejected before launching Actions', async () => {

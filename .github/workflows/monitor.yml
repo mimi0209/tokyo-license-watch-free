@@ -26,7 +26,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: tokyo-license-monitor-${{ github.event_name == 'push' && 'verify' || inputs.mode || 'scan' }}
+  # Tokyo 00:00 is UTC 15:00. Protect its pending scan from later ordinary ticks.
+  group: tokyo-license-monitor-${{ github.event_name == 'push' && 'verify' || (inputs.mode == 'scan' && contains(inputs.scheduled_at, 'T15:00:') && 'midnight') || inputs.mode || 'scan' }}
   cancel-in-progress: false
 
 jobs:
