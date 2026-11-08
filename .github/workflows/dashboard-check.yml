@@ -1,0 +1,36 @@
+name: Dashboard checks
+on:
+  push:
+    branches: ['dashboard/**']
+    paths: ['dashboard/**', 'monitor.mjs', '.github/workflows/dashboard-check.yml']
+  pull_request:
+    paths: ['dashboard/**', 'monitor.mjs', '.github/workflows/dashboard-check.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    if: toJSON(github.event.repository.private) == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check dashboard/worker/index.js
+      - run: node --test dashboard/test/dashboard.test.mjs
+      - run: npm install --no-audit --no-fund
+      - run: node --test dashboard/test/telemetry.test.mjs
+      - name: Validate operation ledger schema
+        run: |
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db = sqlite3.connect(':memory:')
+          db.executescript(Path('dashboard/migrations/0001_operations.sql').read_text())
+          row = ('id', 'owner', 'scan', 'pending', '2026-11-08T00:00:00Z')
+          db.execute('INSERT INTO dashboard_operations (id, owner_id, action, state, created_at) VALUES (?, ?, ?, ?, ?)', row)
+          db.execute('INSERT OR IGNORE INTO dashboard_operations (id, owner_id, action, state, created_at) VALUES (?, ?, ?, ?, ?)', row)
+          assert db.execute('SELECT COUNT(*) FROM dashboard_operations').fetchone()[0] == 1
+          print('Operation IDs are unique and duplicate insertions are ignored.')
+          PY

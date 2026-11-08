@@ -10,12 +10,35 @@ const VERSION = '0.2.0-headed-chromium';
 const CALENDAR_PATH = '/police-pref-tokyo/calendar/01/html/main.html';
 const PLACES = ['250:江東試験場','280:鮫洲試験場','270:府中試験場'];
 const STATE = '.state/last.json';
-export async function notify(message, topic=process.env.NTFY_TOPIC, request=fetch) {
-  if (!/^koto-[a-f0-9]{32}$/.test(topic || '')) throw new Error('NTFY_TOPIC secret is missing or invalid.');
-  const response = await request('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,title:'東京学科試験・云端监控',message,priority:4,click:ENTRY_URL}),signal:AbortSignal.timeout(10000),redirect:'error'});
-  if (!response.ok) throw new Error('Notification delivery failed: HTTP '+response.status);
-  const receipt = await response.json();
-  if (receipt.topic !== topic || receipt.event !== 'message' || !receipt.id) throw new Error('Notification receipt invalid.');
+export function dashboardEvent(event, detail={}) {
+  console.log('DASHBOARD_EVENT',JSON.stringify({event,at:new Date().toISOString(),...detail}));
+}
+export async function notify(message, topic=process.env.NTFY_TOPIC, request=fetch, {kind='opening'}={}) {
+  if (!/^koto-[a-f0-9]{32}$/.test(topic || '')) {
+    dashboardEvent('notification-failed',{kind,reason:'input',field:'NTFY_TOPIC'});
+    throw new Error('NTFY_TOPIC secret is missing or invalid.');
+  }
+  let response;
+  try {
+    response = await request('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,title:'東京学科試験・云端监控',message,priority:4,click:ENTRY_URL}),signal:AbortSignal.timeout(10000),redirect:'error'});
+  } catch(error) {
+    dashboardEvent('notification-failed',{kind,reason:['TimeoutError','AbortError'].includes(error?.name)?'timeout':'network'});
+    throw error;
+  }
+  if (!response.ok) {
+    dashboardEvent('notification-failed',{kind,reason:'http',status:response.status});
+    throw new Error('Notification delivery failed: HTTP '+response.status);
+  }
+  let receipt;
+  try {receipt=await response.json();} catch {
+    dashboardEvent('notification-failed',{kind,reason:'invalid-receipt'});
+    throw new Error('Notification receipt invalid.');
+  }
+  if (receipt.topic !== topic || receipt.event !== 'message' || !receipt.id) {
+    dashboardEvent('notification-failed',{kind,reason:'invalid-receipt'});
+    throw new Error('Notification receipt invalid.');
+  }
+  dashboardEvent('notification-accepted',{kind});
 }
 async function loadState(){try{return JSON.parse(await readFile(STATE,'utf8'));}catch(e){if(e.code==='ENOENT')return {};throw e;}}
 async function saveState(s){await mkdir('.state',{recursive:true});await writeFile(STATE,JSON.stringify(s));}
@@ -162,7 +185,7 @@ export async function runWithVirtualDisplay(start=spawn) {
 }
 export async function main(){
   const mode=process.env.MODE||'scan';
-  if(mode==='test-notification'){await notify('云端通知测试：不是空位通知。');console.log('Notification accepted by ntfy; confirm receipt on your phone.');return;}
+  if(mode==='test-notification'){await notify('云端通知测试：不是空位通知。',process.env.NTFY_TOPIC,fetch,{kind:'test'});console.log('Notification accepted by ntfy; confirm receipt on your phone.');return;}
   if(!['scan','verify'].includes(mode))throw new Error('Unknown mode.');
   const verification=mode==='verify';
   if(!verification&&!/^koto-[a-f0-9]{32}$/.test(process.env.NTFY_TOPIC||''))throw new Error('Set the NTFY_TOPIC repository secret first.');
@@ -180,9 +203,12 @@ export async function main(){
     for(const place of PLACES){
       const result=await scanVenue(page,context,place,deadline,{stopOnOpening:!verification});
       results.push(result);
+      dashboardEvent('venue-progress',{place:result.place,months:result.months,unknown:result.unknown,openings:result.openings,checkedDates:result.checkedDates,complete:!result.found});
       if(!verification&&result.found){
         const key=createHash('sha256').update(JSON.stringify(result.found)).digest('hex');
+        dashboardEvent('opening-detected',{place:result.found.place,date:result.found.date,slots:result.found.slots});
         if(previous.opening!==key)await notify(openingMessage(result.found));
+        else dashboardEvent('notification-duplicate',{place:result.found.place,date:result.found.date});
         await saveState({opening:key,checkedAt:new Date().toISOString()});
         console.log('Confirmed available reception time:',result.found.place,result.found.date);return;
       }

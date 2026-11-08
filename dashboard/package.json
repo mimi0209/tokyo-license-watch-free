@@ -1,0 +1,9 @@
+{
+  "name": "tokyo-license-console",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/dashboard.test.mjs",
+    "build": "node scripts/build.mjs"
+  }
+}
