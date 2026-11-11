@@ -131,9 +131,17 @@ async function checkReceptionSlots(date, expectedPlace) {
         if (count && Number(count[1].replace(/,/g,''))>0 && visible(row) && !input.disabled && !input.matches(':disabled') && input.getAttribute('aria-disabled') !== 'true' && !row.matches('.disabled,.ui-state-disabled,[aria-disabled="true"]')) slots.push(label);
       }
       if (slots.length) return {status:'available',date,slots};
-      if (counts.every(n=>n===0)) return {status:'full',date,slots:[],calendarSelectable:true};
+      const timeRows=[...new Set([
+        ...list.querySelectorAll('label'),
+        ...[...list.querySelectorAll('input[type="radio"]')].map(input=>input.closest('label')||input.parentElement)
+      ])].filter(visible);
+      const everyTimeZero=timeRows.length>0&&timeRows.every(row=>{
+        const count=row.textContent.normalize('NFKC').match(/残り\s*([\d,]+)\s*名/);
+        return count&&Number(count[1].replace(/,/g,''))===0;
+      });
+      if (counts.every(n=>n===0)&&everyTimeZero) return {status:'full',date,slots:[],calendarSelectable:true};
       // Positive counts without an enabled time control are not a confirmed opening.
-      return {status:'unknown',date,slots:[],reason:'残席表示はありますが選択可能な受付時間を確認できません'};
+      return {status:'unknown',date,slots:[],reason:'受付時間ごとの残り人数または選択可能な時段を確認できません'};
     }
     return {status:'unknown',date,slots:[],reason:'受付時間の最新表示を確認できません'};
   } finally {observer.disconnect();}
