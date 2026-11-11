@@ -17,17 +17,29 @@
 
 [快速启动实测](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42137543558)和[正式发布验证](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42137908993)均通过：直接安装完整 Chromium，复用标准 Ubuntu 24.04 镜像已有系统库，完成三个考场及全部可见月份的官网扫描。
 
-[手机通知测试记录](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：使用者已确认收到新主题的测试消息。正常扫描没有空位时不会发手机通知。
+[手机通知测试记录](https://github.com/mimi0209/tokyo-license-watch-free/actions/runs/42021090465)：使用者已确认收到新主题的测试消息。当前通知规则如下。
 
 ## 检查内容
 
 - **每日日本时间 00:00 保留一轮正式扫描。** 即使 `ENABLE_MONITOR="false"` 暂停普通五分钟监控，午夜这一轮仍会执行。它使用独立并发队列，避免被普通扫描占位或被后续待执行任务替换；仍包含在原来的每天 288 次触发中。平台排队或故障可能延迟执行，不能保证 00:00 准秒完成。
 - 江東、鮫洲、府中三个考场。
 - 教習所卒業等、免許証のみ；日本时间当天起，官网允许查看的所有月份。
-- 点击可选日期后检查受付时间，只有剩余人数大于 0 且时间确实可选才通知。
-- 全部时段 0 人则继续监控；加载失败或不能确认时标记失败，留待下一轮检查。
+- 点击黄色的可选日期后检查受付时间，分别通知「黄色但全部时段 0 人」和「确认有可选时段」。加载失败或不能确认时标记失败，绝不把未确认内容说成 0 人。
+- 黄色日期内所有时段均明确显示剩余 0 人时，发送下方提醒，然后继续检查其他日期、全部月份和三个考场。发现真实空位后也继续完成本轮扫描及以后的五分钟监控。
 - 只读取公开空位，不选择时段、不填写个人资料、不提交预约。
 - 通知使用 ntfy；同一空位会尝试去重。
+
+### 黄色日期、内部时段 0 人的通知
+
+```text
+江東試験場 2026-11-12
+カレンダーは黄色ですが、受付時間の残り人数はすべて0人です。
+予約可能な空き枠はありません。監視を継続しています。
+```
+
+日期和会场替换为实际检测结果。此提醒不表示已发现可预约空位。相同会场、相同日期持续为黄色且全部 0 人时，仅提醒一次；后来出现可选时段会另发原有的确认空位通知。黄色日期消失并在完整扫描中确认后重新出现，或状态由有空位变为全 0 人时，可重新提醒。去重依靠状态缓存，缓存丢失或保存失败可能造成重复通知。
+
+日历中的灰色不可选日期、检查时已消失的日期，以及未加载完成或无法确认的时间列表，都不会发送「黄色但 0 人」通知。验证模式不发送通知，不改状态。
 
 ## 免费条件
 
@@ -112,9 +124,9 @@ GitHub API token 只在 Cloudflare 的 Secret 输入框填写，不提交到仓�
 这是外部定时器调用，因此不依靠 GitHub 的 `schedule` 事件；应检查标题中的来源和计划时间。
 
 - `All venues and accessible months checked; no available reception time.`：本轮完整扫描，无可选时段。
-- `Confirmed available reception time:`：确认有可选时段。
+- `NOTIFICATION_OBSERVATION`：包含会场、日期、`calendar-full`（黄色但全 0 人）或 `available`（确认有可选时段），以及 `accepted` / `duplicate-suppressed`。`accepted` 表示 ntfy 已接受，不代替手机实际收到的确认。
 - 任务失败或长时间没有新记录时，监控不算正常运行。
-- 没有空位时不会发送手机通知。当前故障信息记录在平台日志中。
+- 没有黄色可选日期和真实空位时不发手机通知。黄色但全时段 0 人时按上述规则提醒；当前故障信息记录在平台日志中。
 
 ## 暂停与恢复
 
@@ -136,6 +148,10 @@ GitHub API token 只在 Cloudflare 的 Secret 输入框填写，不提交到仓�
 ## 本地检查
 
 ```bash
+npm install --no-audit --no-fund
+npm test
+npx playwright install --no-shell chromium
+xvfb-run -a npm run test:browser # Linux；有图形界面的 Mac 可直接 npm run test:browser
 npm install --prefix cloudflare --no-audit --no-fund
 npm --prefix cloudflare run test
 npm --prefix cloudflare run test:runtime
@@ -144,6 +160,8 @@ npm --prefix cloudflare run check
 
 `npm --prefix cloudflare run deploy` 会先执行两组测试，通过后才发布。测试覆盖普通定时、日本时区午夜、停用开关、私有仓库阻止、固定扫描模式、新旧接口回执、密钥保护，以及真实 Workers 运行时的请求与跳转行为。它们不能代替部署后的连续正式扫描验证。
 
+根目录测试另外覆盖黄色全 0 人文案、重复提醒抑制、状态切换后的真实空位通知、部分扫描失败后的去重保留、日期消失与重现，以及 Chromium 中实际读取日期和时间列表的行为。浏览器测试使用拦截的模拟页面和假通知回执；发布前另以 `MODE=verify` 读取真实官网，不发送测试空位提醒。
+
 官方说明：
 - https://docs.github.com/en/billing/concepts/product-billing/github-actions
 - https://developers.cloudflare.com/workers/platform/pricing/
@@ -151,3 +169,4 @@ npm --prefix cloudflare run check
 - https://developers.cloudflare.com/workers/configuration/cron-triggers/
 
 - https://developers.cloudflare.com/workers/runtime-apis/request/
+

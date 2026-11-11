@@ -102,7 +102,7 @@ async function checkReceptionSlots(date, expectedPlace) {
   if (Number(root?.querySelector('.ui-datepicker-year')?.textContent) !== year || Number(root?.querySelector('.ui-datepicker-month')?.textContent.replace(/\D/g,'')) !== month) throw new Error('受付時間を確認する月が変わりました。');
   const cell = [...root.querySelectorAll('.ui-datepicker-calendar tbody td')].find(td => !td.matches('.ui-datepicker-other-month,.ui-state-disabled,.ui-datepicker-unselectable') && Number(td.querySelector('a.ui-state-default')?.textContent.trim()) === day);
   const link = cell?.querySelector('a.ui-state-default');
-  if (!link) return {status:'full',date,slots:[]}; // The candidate disappeared since the month scan.
+  if (!link) return {status:'full',date,slots:[],calendarSelectable:false}; // A disappeared date is not a yellow/zero-seats alert.
   const list = document.querySelector('#visitTimeChoiceList');
   if (!list) throw new Error('受付時間の表示欄が見つかりません。');
   let changed = false, signature = '', stableSince = Date.now();
@@ -131,10 +131,11 @@ async function checkReceptionSlots(date, expectedPlace) {
         if (count && Number(count[1].replace(/,/g,''))>0 && visible(row) && !input.disabled && !input.matches(':disabled') && input.getAttribute('aria-disabled') !== 'true' && !row.matches('.disabled,.ui-state-disabled,[aria-disabled="true"]')) slots.push(label);
       }
       if (slots.length) return {status:'available',date,slots};
-      if (counts.every(n=>n===0)) return {status:'full',date,slots:[]};
+      if (counts.every(n=>n===0)) return {status:'full',date,slots:[],calendarSelectable:true};
       // Positive counts without an enabled time control are not a confirmed opening.
       return {status:'unknown',date,slots:[],reason:'残席表示はありますが選択可能な受付時間を確認できません'};
     }
     return {status:'unknown',date,slots:[],reason:'受付時間の最新表示を確認できません'};
   } finally {observer.disconnect();}
 }
+

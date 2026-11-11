@@ -1,0 +1,24 @@
+name: Verify yellow calendar notifications
+on:
+  push:
+    branches: [codex/yellow-calendar-notice]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: toJSON(github.event.repository.private) == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npx playwright install --no-shell chromium
+      - run: xvfb-run -a npm run test:browser
+      - name: Read-only real site verification
+        run: npm run scan
+        env:
+          MODE: verify

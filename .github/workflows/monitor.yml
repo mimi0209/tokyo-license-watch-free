@@ -68,6 +68,9 @@ jobs:
         run: npm --prefix cloudflare run test:runtime
 
       - run: npm install --no-audit --no-fund
+      - name: Test notification rules
+        if: github.event_name == 'push'
+        run: npm test
       - name: Send requested phone test
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[phone-test]')
         run: npm run scan
@@ -76,6 +79,9 @@ jobs:
           MODE: test-notification
 
       - run: npx playwright install --no-shell chromium
+      - name: Test calendar in Chromium
+        if: github.event_name == 'push'
+        run: xvfb-run -a npm run test:browser
 
       - uses: actions/cache/restore@v4
         with:
@@ -94,3 +100,4 @@ jobs:
         with:
           path: .state
           key: watch-state-${{ github.run_id }}-${{ github.run_attempt }}
+

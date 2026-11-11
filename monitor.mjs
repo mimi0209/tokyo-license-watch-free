@@ -6,7 +6,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 const ENTRY_URL = 'https://license-renew.tokyo-madoguchi-yoyaku.com/police-pref-tokyo/index_000.html';
 const MAIN_URL = 'https://license-test.tokyo-madoguchi-yoyaku.com/police-pref-tokyo/01/html/main.html?lang=ja';
-const VERSION = '0.2.0-headed-chromium';
+const VERSION = '0.3.0-calendar-zero-seats';
 const CALENDAR_PATH = '/police-pref-tokyo/calendar/01/html/main.html';
 const PLACES = ['250:江東試験場','280:鮫洲試験場','270:府中試験場'];
 const STATE = '.state/last.json';
@@ -113,7 +113,7 @@ export async function prepareCalendar(page,restoreCalendar,place) {
   }finally {context.off('requestfailed',failed);context.off('response',response);for(const p of context.pages())p.off('pageerror',pageError);}
 }
 
-export async function scanVenue(page, functions, place, deadline, {stopOnOpening=true}={}) {
+export async function scanVenue(page, functions, place, deadline, {stopOnOpening=true,onDateChecked=async()=>{}}={}) {
   const {restoreCalendar,readCalendar,turnCalendarMonth,checkReceptionSlots} = functions;
   const budget=()=>{if(Date.now()>deadline)throw new Error('Scan time limit reached; some dates remain unchecked.');};
   page=await prepareCalendar(page,restoreCalendar,place);
@@ -121,9 +121,9 @@ export async function scanVenue(page, functions, place, deadline, {stopOnOpening
     budget();if(count>=120)throw new Error('Previous-month navigation exceeded limit.');
     if(!(await page.evaluate(turnCalendarMonth,-1)).moved)break;
   }
-  const months=[],unknown=[],openings=[];
+  const months=[],unknown=[],openings=[],calendarFullDates=[];
   let checkedDates=0,fullDates=0;
-  const coverage=()=>({place,months,unknown,openings,checkedDates,fullDates});
+  const coverage=()=>({place,months,unknown,openings,calendarFullDates,checkedDates,fullDates});
   for(;;){
     budget();const result=await page.evaluate(readCalendar);
     if(result.place!==place)throw new Error('Venue mismatch.');
@@ -140,9 +140,17 @@ export async function scanVenue(page, functions, place, deadline, {stopOnOpening
         if(!Array.isArray(detail.slots)||!detail.slots.length)throw new Error('Available time is missing its selectable slot.');
         const found={place,date,slots:detail.slots};
         openings.push(found);
+        await onDateChecked({kind:'available',...found});
         if(stopOnOpening)return {...coverage(),found};
       } else if(detail.status==='unknown')unknown.push(place.split(':')[1]+' '+date);
-      else fullDates++;
+      else {
+        fullDates++;
+        if(detail.calendarSelectable===true){
+          const found={place,date};
+          calendarFullDates.push(found);
+          await onDateChecked({kind:'calendar-full',...found});
+        }
+      }
     }
     if(!(await page.evaluate(turnCalendarMonth,1)).moved){
       console.log('SCAN_VENUE_COMPLETE',JSON.stringify(coverage()));
@@ -151,6 +159,29 @@ export async function scanVenue(page, functions, place, deadline, {stopOnOpening
   }
 }
 export function openingMessage(opening){return `${opening.place.split(':')[1]} ${opening.date}\n${opening.slots.join('\n')}\n发现可选时段，请尽快在官网确认并预约。`}
+export function calendarFullMessage(date){return `${date.place.split(':')[1]} ${date.date}\nカレンダーは黄色ですが、受付時間の残り人数はすべて0人です。\n予約可能な空き枠はありません。監視を継続しています。`;}
+export async function notifyObservation(observation,state,{send=notify,persist=saveState}={}) {
+  if(!PLACES.includes(observation.place)||!/^\d{4}-\d{2}-\d{2}$/.test(observation.date)||!['available','calendar-full'].includes(observation.kind))throw new Error('Notification observation invalid.');
+  const {place,date,kind}=observation;
+  if(kind==='available'&&(!Array.isArray(observation.slots)||!observation.slots.length))throw new Error('Available time is missing its selectable slot.');
+  const key=place+'|'+date;
+  const opening={place,date,slots:observation.slots};
+  const signature=kind==='calendar-full'?'calendar-full':createHash('sha256').update(JSON.stringify(opening)).digest('hex');
+  state.observations??={};
+  const duplicate=state.observations[key]===signature || (kind==='available'&&!state.observations[key]&&state.opening===signature);
+  if(!duplicate)await send(kind==='calendar-full'?calendarFullMessage(observation):openingMessage(observation));
+  state.observations[key]=signature;
+  state.checkedAt=new Date().toISOString();
+  // Persist each accepted notification before continuing: a later scan failure must not resend it.
+  await persist(state);
+  console.log('NOTIFICATION_OBSERVATION',JSON.stringify({place,date,kind,delivery:duplicate?'duplicate-suppressed':'accepted'}));
+  return !duplicate;
+}
+export function retainObservedDates(state,results){
+  const seen=new Set(results.flatMap(r=>[...r.openings,...r.calendarFullDates].map(x=>x.place+'|'+x.date)));
+  for(const key of Object.keys(state.observations||{}))if(!seen.has(key))delete state.observations[key];
+  delete state.opening; // Legacy single-opening dedup is migrated on the first complete scan.
+}
 export async function runWithVirtualDisplay(start=spawn) {
   console.log('BROWSER_MODE headed Chromium with a virtual display');
   const exitCode=await new Promise((resolve,reject)=>{
@@ -178,14 +209,11 @@ export async function main(){
     const page=await browser.newPage({locale:'ja-JP',timezoneId:'Asia/Tokyo'});
     const results=[],deadline=Date.now()+6*60*1000;
     for(const place of PLACES){
-      const result=await scanVenue(page,context,place,deadline,{stopOnOpening:!verification});
+      const result=await scanVenue(page,context,place,deadline,{
+        stopOnOpening:false,
+        onDateChecked:verification?async()=>{}:observation=>notifyObservation(observation,previous)
+      });
       results.push(result);
-      if(!verification&&result.found){
-        const key=createHash('sha256').update(JSON.stringify(result.found)).digest('hex');
-        if(previous.opening!==key)await notify(openingMessage(result.found));
-        await saveState({opening:key,checkedAt:new Date().toISOString()});
-        console.log('Confirmed available reception time:',result.found.place,result.found.date);return;
-      }
     }
     const unknown=results.flatMap(r=>r.unknown);
     console.log('SCAN_REPORT',JSON.stringify({version:VERSION,mode,checkedAt:new Date().toISOString(),venues:results,unverifiedDates:unknown}));
@@ -193,9 +221,11 @@ export async function main(){
     if(verification){
       console.log('VERIFIED: all three venues and accessible months checked; no notification sent and no state changed.');
     } else {
-      await saveState({checkedAt:new Date().toISOString()});
-      console.log('All venues and accessible months checked; no available reception time.');
+      retainObservedDates(previous,results);
+      await saveState({...previous,checkedAt:new Date().toISOString()});
+      console.log(results.some(r=>r.openings.length)?'All venues and accessible months checked; confirmed available reception times reported.':'All venues and accessible months checked; no available reception time.');
     }
   } finally {await browser.close();}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)main().catch(e=>{console.error('Monitor failed:',e.message);process.exitCode=1;});
+

@@ -3,7 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "scripts": {"scan": "node monitor.mjs"},
+  "scripts": {"scan": "node monitor.mjs", "test": "node --test test/monitor.test.mjs", "test:browser": "node --test test/calendar-browser.test.mjs"},
   "dependencies": {"playwright": "1.62.1"},
   "engines": {"node": ">=22"}
 }
+
