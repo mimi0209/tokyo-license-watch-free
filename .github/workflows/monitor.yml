@@ -84,6 +84,7 @@ jobs:
         run: xvfb-run -a npm run test:browser
 
       - uses: actions/cache/restore@v4
+        if: github.event_name != 'push' && inputs.mode == 'scan'
         with:
           path: .state
           key: watch-state-${{ github.run_id }}-${{ github.run_attempt }}
@@ -96,7 +97,7 @@ jobs:
           MODE: ${{ github.event_name == 'push' && 'verify' || inputs.mode || 'scan' }}
 
       - uses: actions/cache/save@v4
-        if: always() && hashFiles('.state/last.json') != ''
+        if: always() && github.event_name != 'push' && inputs.mode == 'scan' && hashFiles('.state/last.json') != ''
         with:
           path: .state
           key: watch-state-${{ github.run_id }}-${{ github.run_attempt }}
