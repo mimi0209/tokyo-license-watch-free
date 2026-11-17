@@ -1,8 +1,10 @@
 # 东京学科考试空位监控：免费方案
 
+**当前状态（2026-11-17）：使用者已通过电话预约，全部自动监控已停用，包括五分钟检查、每日日本时间 00:00 检查和通知。** Cloudflare 的 `crons=[]`、`ENABLE_MONITOR="false"`；GitHub 监控 job 设为 `if: false`，防止传播期间的残留触发启动扫描。源代码和历史记录保留。
+
 此版本使用 **Cloudflare Workers Free 的定时器**，每五分钟调用 GitHub 的运行接口；浏览器扫描由**公开仓库的标准 GitHub Linux 运行器**执行。Mac 可以合盖或关机。
 
-**当前状态（2026-11-06）：已确认连续两轮由 Cloudflare 自动触发、以 `MODE=scan` 完成正式扫描。手机通知此前已测试并由使用者确认收到。**
+**历史验证（2026-11-06）：已确认连续两轮由 Cloudflare 自动触发、以 `MODE=scan` 完成正式扫描。手机通知此前已测试并由使用者确认收到。**
 
 以下时间均为日本时间；计划触发与实际扫描完成分开记录，平台排队可能造成延迟。
 
@@ -129,6 +131,8 @@ GitHub API token 只在 Cloudflare 的 Secret 输入框填写，不提交到仓�
 - 没有黄色可选日期和真实空位时不发手机通知。黄色但全时段 0 人时按上述规则提醒；当前故障信息记录在平台日志中。
 
 ## 暂停与恢复
+
+目前为完整停用状态。日后若明确需要重启，应同时将 `.github/workflows/monitor.yml` 的 `jobs.monitor.if` 恢复为 `toJSON(github.event.repository.private) == 'false'`、恢复 Cron，并开启 `ENABLE_MONITOR`。只改其中一个开关不会完整恢复监控。当前已移除监控工作流的 push 自动检查事件，避免保存停用配置时额外读取官网。
 
 从 GitHub 导入后，以仓库的 `cloudflare/wrangler.toml` 为配置来源，提交后由 Cloudflare 自动部署：
 

@@ -10,10 +10,10 @@ enabled = true
 head_sampling_rate = 1
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = []
 
 [vars]
 GITHUB_REPOSITORY = "mimi0209/tokyo-license-watch-free"
-ENABLE_MONITOR = "true"
+ENABLE_MONITOR = "false"
 
 # GITHUB_TOKEN must be added as a Cloudflare Secret. Never put its value in this file.

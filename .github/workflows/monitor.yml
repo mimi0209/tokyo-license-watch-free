@@ -2,9 +2,6 @@ name: Tokyo license watch
 run-name: "${{ github.event_name == 'push' && 'deployment-check' || inputs.source || 'manual' }} / ${{ github.event_name == 'push' && 'verify' || inputs.mode || 'scan' }} / ${{ inputs.scheduled_at || 'now' }}"
 
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/monitor.yml']
   workflow_dispatch:
     inputs:
       mode:
@@ -32,8 +29,9 @@ concurrency:
 
 jobs:
   monitor:
-    # Fail closed on a private repository so this export cannot consume paid private runner minutes.
-    if: toJSON(github.event.repository.private) == 'false'
+    # Stopped at the owner's request after booking by phone (2026-11-17).
+    # This blocks ordinary scans, midnight scans, manual notifications, and timer propagation.
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
